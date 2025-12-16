@@ -1,0 +1,17 @@
+# Secrets & configs
+*.json
+*.yml
+*.yaml
+
+# Environment files
+.env
+.env.*
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
