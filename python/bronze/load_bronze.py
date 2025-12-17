@@ -1,87 +1,108 @@
-import json
-import pandas as pd
-import numpy as np
 import os
 import sys
+import pandas as pd
+import json
+import numpy as np
 from sqlalchemy import types
 from typing import Any, cast
 from sqlalchemy.dialects.mysql import JSON as MYSQL_JSON
 
-# --- 1. System Path Setup (Ye sabse zaruri hai imports ke liye) ---
-# Current script: python/bronze/load_bronze.py
-# Hume 'python' folder ko sys.path mein add karna hai taaki 'utils' import ho sake
 current_dir = os.path.dirname(os.path.abspath(__file__)) # .../python/bronze
 python_folder = os.path.dirname(current_dir)             # .../python
 
 if python_folder not in sys.path:
     sys.path.append(python_folder)
 
-# Ab hum utils se safely import kar sakte hain
+
 from utils.db_connection import get_engine
 from utils.paths import get_raw_data_path
 
-def load_cust_info():
-    print("--- Starting Bronze Load: Customers ---")
-    
-    # --- 2. Connect to Database ---
+#! Bronze CSV Reader Function
+def read_bronze_csv(csv_path: str) -> pd.DataFrame:
+    """
+    Bronze CSV reader:
+    - checks file exists
+    - reads all columns as string
+    - normalizes headers
+    """
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"CSV not found at: {csv_path}")
+
+    df = pd.read_csv(csv_path, dtype=str)
+    df.columns = df.columns.str.strip().str.lower()
+    return df
+
+#! Add Raw Row Function
+def add_raw_row(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Adds raw_row JSON column for Bronze layer
+    """
+    df_temp = df.where(pd.notnull(df), np.nan)
+    df["raw_row"] = df_temp.apply(
+        lambda r: json.dumps(r.to_dict(), default=str),
+        axis=1
+    )
+    return df
+
+
+#! Database Connection Function
+def data_base_connection():
     try:
         engine = get_engine("bronze")
         print("Database connected successfully.")
+        return engine  # Return it!
     except Exception as e:
         print(f"Connection Error: {e}")
-        return
-
-    # --- 3. Locate CSV File ---
-    # Aapke tree.txt ke mutabik file 'source_crm' folder ke andar hai
-    csv_filename = os.path.join("source_crm", "cust_info.csv")
-    csv_path = get_raw_data_path(csv_filename)
+        return None  
     
-    print(f"Reading CSV from: {csv_path}")
-
-    if not os.path.exists(csv_path):
-        print(f"CRITICAL ERROR: File nahi mili at {csv_path}")
-        print("Please check if file exists in 'data/raw/source_crm/'")
+#! Customer Load Function
+def load_cust_info():
+    print("Starting Bronze Load: Customers.")
+    
+    engine =data_base_connection()
+    if engine is None:
+        print("Exiting due to database connection failure.")
         return
-
-    # --- 4. Read & Transform ---
     try:
-        # Read all as string to preserve raw format (Phone numbers, dates, etc.)
-        df = pd.read_csv(csv_path, dtype=str)
-        
-        # Normalize headers (remove spaces, lowercase)
-        df.columns = df.columns.str.strip().str.lower()
+        # 1. Read CSV (wrapped)
+        csv_path = get_raw_data_path(
+        os.path.join("source_crm", "prd_info.csv")
+    )
 
-        # Handle NaNs for JSON dump (NaN is not valid JSON)
-        df_temp = df.where(pd.notnull(df), np.nan)
+        df = read_bronze_csv(csv_path)
         
-        # Create 'raw_row' - pure copy of source data in JSON format
-        df['raw_row'] = df_temp.apply(lambda r: json.dumps(r.to_dict(), default=str), axis=1)
-        
-        # Optional: Add load timestamp
-        df['load_timestamp'] = pd.Timestamp.now()
+        # 2. Add raw_row (wrapped)
+        df = add_raw_row(df)
 
-        # --- 5. Map Columns ---
+
+        # 3. Map Columns 
         # .get() 
-        df['cst_id'] = df.get('cst_id')
-        df['cst_key'] = df.get('cst_key')
-        df['cst_firstname'] = df.get('cst_firstname')
-        df['cst_lastname'] = df.get('cst_lastname')
-        df['cst_marital_status'] = df.get('cst_marital_status')
-        df['cst_gndr'] = df.get('cst_gndr')
+        df['cst_id']              = df.get('cst_id')
+        df['cst_key']             = df.get('cst_key')
+        df['cst_firstname']       = df.get('cst_firstname')
+        df['cst_lastname']        = df.get('cst_lastname')
+        df['cst_marital_status']  = df.get('cst_marital_status')
+        df['cst_gndr']            = df.get('cst_gndr')
         df['cst_create_date_raw'] = df.get('cst_create_date')
 
-        # Select columns to write
+        #* Select columns to write
         final_cols = [
-            'raw_row', 'cst_id', 'cst_key', 'cst_firstname', 
-            'cst_lastname', 'cst_marital_status', 'cst_gndr', 
-            'cst_create_date_raw', 'load_timestamp'
+            'raw_row', 
+            'cst_id', 
+            'cst_key',
+            'cst_firstname', 
+            'cst_lastname', 
+            'cst_marital_status',
+            'cst_gndr', 
+            'cst_create_date_raw',
+            'load_timestamp'
         ]
         
-        # Filter dataframe to only include columns that actually exist now
+        #* Filter dataframe to only include columns that actually exist now
         cols_to_write = [c for c in final_cols if c in df.columns]
         df_final = df[cols_to_write]
 
-        # --- 6. Write to MySQL ---
+        #* 6. Write to MySQL 
         dtype_map = {
             "raw_row": MYSQL_JSON,
             "cst_id": types.VARCHAR(50),
@@ -100,62 +121,125 @@ def load_cust_info():
             dtype=cast(Any, dtype_map)
         )
         
-        print("--- Success: Data Loaded to Bronze Layer ---")
+        print("Success: Data Loaded to bronze_db crm_customers_info table.")
 
     except Exception as e:
         print(f"Processing Error: {e}")
 
-def load_prd_info():
-    print("--- Starting Bronze Load: Product ---")
-    
-    # --- 2. Connect to Database ---
+#! Sales Load Function
+def load_sales_details_info():
+    print("Starting Bronze Load: Sales.")
+    #! Connect to Database
+    engine =data_base_connection()
+    if engine is None:
+        print("Exiting due to database connection failure.")
+        return
+
     try:
-        engine = get_engine("bronze")
-        print("Database connected successfully.")
+        csv_path = get_raw_data_path(
+        os.path.join("source_crm", "sales_details.csv")
+    )
+        #! 1. Read CSV (wrapped)
+        df = read_bronze_csv(csv_path)
+
+        #! 2. Add raw_row (wrapped)
+        df = add_raw_row(df)
+        #! 3. Map Columns 
+        #! .get() 
+
+        df['ingest_id']            = df.get('ingest_id')
+        df['sales_ord_num']        = df.get('sls_ord_num')
+        df['sales_cust_id']        = df.get('sls_cust_id')
+        df['sales_order_date_raw'] = df.get('sls_order_dt')
+        df['sales_ship_date_raw']  = df.get('sls_ship_dt')
+        df['sales_due_date_raw']   = df.get('sls_due_dt')
+        df['sales_sales']          = df.get('sls_sales')
+        df['sales_quantity']       = df.get('sls_quantity')
+        df['sales_price']          = df.get('sls_price')
+        df['loaded_at']            = pd.Timestamp.now()
+
+        final_cols =['ingest_id',
+                    'raw_row',
+                    'sales_ord_num',
+                    'sales_cust_id',
+                    'sales_order_date_raw',
+                    'sales_ship_date_raw',
+                    'sales_due_date_raw',
+                    'sales_sales',
+                    'sales_quantity',
+                    'sales_price',
+                    'loaded_at']
+        
+        cols_to_write = [c for c in final_cols if c in df.columns]
+        df_final = df[cols_to_write]
+        
+        dtype_map = {
+            "raw_row": MYSQL_JSON,
+            "sales_order_num": types.VARCHAR(50),
+            "sales_order_key": types.VARCHAR(100),
+            "sales_order_id": types.VARCHAR(100)
+        }
+        print(f"Writing {len(df_final)} rows to table 'crm_sales_details'...")
+        df_final.to_sql(
+            name='crm_sales_details',
+            con=engine,
+            if_exists='append',
+            index=False,
+            chunksize=1000,
+            dtype=cast(Any, dtype_map)
+        )
+        
+        print("Success: Data Loaded to bronze_db crm_sales_details table.")
     except Exception as e:
-        print(f"Connection Error: {e}")
-        return
-    csv_filename = os.path.join("source_crm", "prd_info.csv")
-    csv_path = get_raw_data_path(csv_filename)
-    print(f"Reading CSV from: {csv_path}")
+        print(f"Processing Error: {e}")
 
-    if not os.path.exists(csv_path):
-        print(f"CRITICAL ERROR: File nahi mili at {csv_path}")
-        print("Please check if file exists in 'data/raw/source_crm/'")
+#! Product Load Function
+def load_prd_info():
+    print("Starting Bronze Load: Product.")
+    
+    #! Connect to Database 
+    engine =data_base_connection()
+    if engine is None:
+        print("Exiting due to database connection failure.")
         return
 
-    # --- 4. Read & Transform ---
     try:
-        # Read all as string to preserve raw format (Phone numbers, dates, etc.)
-        df = pd.read_csv(csv_path, dtype=str)
-        
-        # Normalize headers (remove spaces, lowercase)
-        df.columns = df.columns.str.strip().str.lower()
-
-        # Handle NaNs for JSON dump (NaN is not valid JSON)
-        df_temp = df.where(pd.notnull(df), np.nan)
-        
-        # Create 'raw_row' - pure copy of source data in JSON format
-        df['raw_row'] = df_temp.apply(lambda r: json.dumps(r.to_dict(), default=str), axis=1)
-        df['prd_id'] = df.get('prd_id')
-        df['prd_key'] = df.get('prd_key')
+        #! 1. Read CSV 
+        csv_path = get_raw_data_path(
+        os.path.join("source_crm", "prd_info.csv")
+    )
+        df = read_bronze_csv(csv_path)
+        #! 2. Add raw_row
+        df = add_raw_row(df)
+        df['prd_id']    = df.get('prd_id')
+        df['prd_key']   = df.get('prd_key')
         df['prd_name']  = df.get('prd_nm')
-        df['prd_cost'] = df.get('prd_cost')
-        df['prd_line'] = df.get('prd_line')
+        df['prd_cost']  = df.get('prd_cost')
+        df['prd_line']  = df.get('prd_line')
         df['prd_start_date_raw'] = df.get('prd_start_dt')
         df['prd_end_date_raw'] = df.get('prd_end_dt')
 
-        final_cols = ['raw_row','prd_id','prd_key',
-                      'prd_name','prd_cost','prd_line',
-                      'prd_start_date_raw','prd_end_date_raw']
+        #! Select columns to write
+        final_cols =['raw_row',
+                    'prd_id',
+                    'prd_key',
+                    'prd_name',
+                    'prd_cost',
+                    'prd_line',
+                    'prd_start_date_raw',
+                    'prd_end_date_raw']
+        
+        #! Filter dataframe to only include columns that actually exist now
         cols_to_write = [c for c in final_cols if c in df.columns]
         df_final = df[cols_to_write]
+        #! Write to MySQL
         dtype_map = {
-            "raw_row": MYSQL_JSON,
-            "prd_id": types.VARCHAR(50),
-            "prd_key": types.VARCHAR(100),
+            "raw_row":  MYSQL_JSON,
+            "prd_id":   types.VARCHAR(50),
+            "prd_key":  types.VARCHAR(100),
             "prd_name": types.VARCHAR(100)
         }
+        #! console log
         print(f"Writing {len(df_final)} rows to table 'crm_prd_info'...")
         df_final.to_sql(
             name='crm_prd_info',
@@ -166,9 +250,197 @@ def load_prd_info():
             dtype=cast(Any, dtype_map)
         )
         
-        print("--- Success: Data Loaded to Bronze Layer ---")
+        print("Success: Data Loaded to bronze_db crm_prd_info table.")
     except Exception as e:
         print(f"Processing Error: {e}")
-if __name__ == "__main__":
-    # load_cust_info()
+
+#! ERP Load Functions
+def load_erp_cust_az12():
+    print("Starting Bronze Load: ERP Customer.")
+    
+    #! Connect to Database
+    engine =data_base_connection()
+    if engine is None:
+        print("Exiting due to database connection failure.")
+        return
+    try:
+        
+        csv_path = get_raw_data_path(os.path.join
+                ("source_erp", "CUST_AZ12.csv"))
+        #! 1. Read  CSV
+        df = read_bronze_csv(csv_path)
+        #! 2. Add raw_row
+        df = add_raw_row(df)
+
+        #! 3.Colunmn Mapping
+        df['ingest_id']       = df.get('ingest_id')
+        df['cid']             = df.get('cid')
+        df['birth_date_raw']  = df.get('bdate')
+        df['gender_raw']      = df.get('gen')
+        df['loaded_at']       = pd.Timestamp.now()
+
+        final_cols = ['ingest_id',
+                    'raw_row',
+                    'cid',
+                    'birth_date_raw',
+                    'gender_raw',
+                    'loaded_at']
+        
+        cols_to_write = [c for c in final_cols if c in df.columns]
+        df_final = df[cols_to_write]
+
+        #! Write to MySQL
+        dtype_map = {
+            "raw_row": MYSQL_JSON,
+            "cid": types.VARCHAR(50)
+        }
+        #! console log
+        print(f"Writing {len(df_final)} rows to table 'erp_cust_az12'...")
+        df_final.to_sql(
+            name='erp_cust_az12',
+            con=engine,
+            if_exists='append',
+            index=False,
+            chunksize=1000,
+            dtype=cast(Any, dtype_map)
+        )
+        
+        print("Success: Data Loaded to bronze_db erp_cust_az12 table.")
+    except Exception as e:
+        print(f"Processing Error: {e}")
+
+def load_erp_location_a101():
+    print("Starting Bronze Load: ERP Location.")
+    
+    #! Connect to Database
+    engine =data_base_connection()
+    if engine is None:
+        print("Exiting due to database connection failure.")
+        return
+    try:
+        
+        csv_path = get_raw_data_path(os.path.join
+                ("source_erp", "LOC_A101.csv"))
+        #! 1. Read  CSV
+        df = read_bronze_csv(csv_path)
+        #! 2. Add raw_row
+        df = add_raw_row(df)
+
+        #! 3.Colunmn Mapping
+        df['ingest_id']       = df.get('ingest_id')
+        df['cid']             = df.get('cid')
+        df['country_name']    = df.get('cntry')
+        df['loaded_at']       = pd.Timestamp.now()
+
+        final_cols = ['ingest_id',
+                    'raw_row',
+                    'cid',
+                    'country_name',
+                    'loaded_at']
+        
+        cols_to_write = [c for c in final_cols if c in df.columns]
+        df_final = df[cols_to_write]
+
+        #! Write to MySQL
+        dtype_map = {
+            "raw_row": MYSQL_JSON,
+            "cid": types.VARCHAR(50)
+        }
+        #! console log
+        print(f"Writing {len(df_final)} rows to table 'erp_location_a101'")
+        df_final.to_sql(
+            name='erp_location_a101',
+            con=engine,
+            if_exists='append',
+            index=False,
+            chunksize=1000,
+            dtype=cast(Any, dtype_map)
+        )
+        
+        print("Success: Data Loaded to bronze_db erp_location_a101 table.")
+    except Exception as e:
+        print(f"Processing Error: {e}")
+
+def load_erp_px_cat_g1v2():
+    print("Starting Bronze Load: ERP Category.")
+    
+    #! Connect to Database
+    engine =data_base_connection()
+    if engine is None:
+        print("Exiting due to database connection failure.")
+        return
+    try:
+        
+        csv_path = get_raw_data_path(os.path.join
+                ("source_erp", "PX_CAT_G1V2.csv"))
+        #! 1. Read  CSV
+        df = read_bronze_csv(csv_path)
+        #! 2. Add raw_row
+        df = add_raw_row(df)
+
+        #! 3.Colunmn Mapping
+        df['ingest_id']       = df.get('ingest_id')
+        df['id']              = df.get('id')
+        df['cat']             = df.get('cat')
+        df['subcat']         = df.get('subcat')
+        df['maintenance_raw'] = df.get('maintenance')
+        df['loaded_at']       = pd.Timestamp.now()
+
+        final_cols = ['ingest_id',
+                    'raw_row',
+                    'id',
+                    'cat',
+                    'subcat',
+                    'maintenance_raw',
+                    'loaded_at']
+        
+        cols_to_write = [c for c in final_cols if c in df.columns]
+        df_final = df[cols_to_write]
+
+        #! Write to MySQL
+        dtype_map = {
+            "raw_row": MYSQL_JSON,
+            "id": types.VARCHAR(50)
+        }
+        #! console log
+        print(f"Writing {len(df_final)} rows to table 'erp_px_cat_g1v2'...")
+        df_final.to_sql(
+            name='erp_px_cat_g1v2',
+            con=engine,
+            if_exists='append',
+            index=False,
+            chunksize=1000,
+            dtype=cast(Any, dtype_map)
+        )
+        
+        print("Success: Data Loaded to bronze_db erp_px_cat_g1v2 table.")
+    except Exception as e:
+        print(f"Processing Error: {e}")
+
+#! Orchestration Function
+def run_bronze_pipeline():
+    """
+    Orchestrates complete Bronze layer ingestion.
+    Entry point for local runs, schedulers, and future Airflow DAGs.
+    """
+    print("Starting Bronze Layer Pipeline...")
+
+    # CRM sources
+    load_cust_info()
     load_prd_info()
+    load_sales_details_info()
+
+    # ERP sources
+    load_erp_cust_az12()
+    load_erp_location_a101()
+    load_erp_px_cat_g1v2()
+
+    print("Bronze Layer Pipeline Completed Successfully.")
+
+
+def main():
+    run_bronze_pipeline()
+
+
+if __name__ == "__main__":
+    main()

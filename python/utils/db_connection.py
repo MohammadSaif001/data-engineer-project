@@ -4,8 +4,6 @@ import os
 from sqlalchemy import create_engine
 from urllib.parse import quote_plus
 
-# Hum 'paths.py' se function import karenge
-# Note: Relative import use kar rahe hain kyunki dono same folder mein hain
 try:
     from .paths import get_config_path
 except ImportError:
@@ -16,7 +14,7 @@ def load_config():
     config_path = get_config_path()
     
     # Debugging ke liye print (optional)
-    # print(f"Loading config from: {config_path}")
+    print(f"Loading config from: {config_path}")
 
     with open(config_path, "r") as file:
         return json.load(file)

@@ -31,8 +31,7 @@ def check_data_slim():
             if df.empty:
                 print("⚠️  Table is empty!")
             else:
-                # 'raw_row' column ko drop kar rahe hain sirf display ke liye
-                # Taaki output screen par fit ho sake
+                
                 if 'raw_row' in df.columns:
                     df_display = df.drop(columns=['raw_row'])
                 else:
