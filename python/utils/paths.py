@@ -19,3 +19,7 @@ def get_raw_data_path(relative_path):
     -> .../data_engineering_project/data/raw/source_crm/cust_info.csv
     """
     return os.path.join(get_project_root(), "data", "raw", relative_path)
+
+def get_logs_path(relative_path):
+    """Returns absolute path to a file inside data/logs/."""
+    return os.path.join(get_project_root(), "data", "logs", relative_path)
