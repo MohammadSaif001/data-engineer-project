@@ -39,10 +39,12 @@ class TestDbConfig(unittest.TestCase):
         cfg = load_config()
         self.assertIn("mysql", cfg)
 
-    def test_password_not_hardcoded(self):
+    def test_password_not_hardcoded_in_config_file(self):
         cfg = load_config()
-        self.assertNotEqual(cfg["mysql"].get("password"), "841506",
-                            "Hardcoded password detected in config")
+        password = cfg["mysql"].get("password", "")
+        self.assertEqual(password, "",
+                         "Config file should not contain a password; "
+                         "use DB_PASSWORD environment variable instead")
 
 
 class TestBronzeHelpers(unittest.TestCase):

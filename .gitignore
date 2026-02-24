@@ -9,7 +9,8 @@ build/
 
 # Environment files
 .env
-.env.*
+.env.local
+.env.production
 
 # Logs
 data/logs/

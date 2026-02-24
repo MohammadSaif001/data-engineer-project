@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import logging
 import pandas as pd
@@ -6,7 +7,6 @@ import numpy as np
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 python_folder = os.path.dirname(current_dir)
-import sys
 if python_folder not in sys.path:
     sys.path.append(python_folder)
 
