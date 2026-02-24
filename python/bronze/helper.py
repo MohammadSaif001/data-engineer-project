@@ -4,8 +4,18 @@ import logging
 import pandas as pd
 import numpy as np
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+python_folder = os.path.dirname(current_dir)
+import sys
+if python_folder not in sys.path:
+    sys.path.append(python_folder)
+
+from utils.paths import get_logs_path
+
+_log_path = get_logs_path("pipeline.log")
+os.makedirs(os.path.dirname(_log_path), exist_ok=True)
 logging.basicConfig(
-    filename=r"D:\data_engineering_project\data\logs\pipeline.log",
+    filename=_log_path,
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
 )

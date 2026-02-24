@@ -10,11 +10,7 @@ except ImportError:
     from utils.paths import get_config_path
 
 def load_config():
-    # RELATIVE STRING NAHI, FUNCTION CALL KAREIN:
     config_path = get_config_path()
-    
-    # Debugging ke liye print (optional)
-    print(f"Loading config from: {config_path}")
 
     with open(config_path, "r") as file:
         return json.load(file)
@@ -28,15 +24,16 @@ def get_engine(layer="bronze"):
 
     cfg = full_config['mysql']
     
-    user = cfg['user']
-    pwd = cfg['password']
-    host = cfg['host']
-    port = cfg.get('port', 3306)
+    # Prefer environment variables over config file values
+    user = os.environ.get('DB_USER', cfg['user'])
+    pwd = os.environ.get('DB_PASSWORD', cfg.get('password', ''))
+    host = os.environ.get('DB_HOST', cfg['host'])
+    port = int(os.environ.get('DB_PORT', cfg.get('port', 3306)))
     
     db_map = {
-        "bronze": cfg['bronze_db'],
-        "silver": cfg['silver_db'],
-        "gold": cfg['gold_db']
+        "bronze": os.environ.get('DB_BRONZE', cfg['bronze_db']),
+        "silver": os.environ.get('DB_SILVER', cfg['silver_db']),
+        "gold": os.environ.get('DB_GOLD', cfg['gold_db'])
     }
     
     if layer not in db_map:

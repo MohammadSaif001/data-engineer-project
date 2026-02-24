@@ -1,21 +1,19 @@
-# Secrets & configs
-*.json
-*.yml
-*.yaml
-
-# Logs
-logs/
-*.log
-# Notebooks like Jupyter
-*.ipynb
+# Python cache
+__pycache__/
+*.pyc
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
 
 # Environment files
 .env
 .env.*
 
-# Python cache
-__pycache__/
-*.pyc
+# Logs
+data/logs/
+*.log
 
 # VS Code
 .vscode/
@@ -27,3 +25,6 @@ Desktop.ini
 
 # Local data/state
 data/processed/
+
+# Notebooks
+*.ipynb

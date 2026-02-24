@@ -17,17 +17,18 @@ if python_folder not in sys.path:
 
 
 from utils.db_connection import get_engine
-from utils.paths import get_raw_data_path
+from utils.paths import get_raw_data_path, get_logs_path
 
 from utils.ingestion_checker import(
     PROCESSED_FILE,
     is_file_processed,
     mark_file_processed
 )
-print("PROCESSED_FILE PATH =", PROCESSED_FILE)
 
+_log_path = get_logs_path("pipeline.log")
+os.makedirs(os.path.dirname(_log_path), exist_ok=True)
 logging.basicConfig(
-    filename=r"D:\data_engineering_project\data\logs\pipeline.log",
+    filename=_log_path,
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
 )

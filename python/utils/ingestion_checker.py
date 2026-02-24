@@ -2,6 +2,8 @@ import os
 import logging
 import pandas as pd
 
+from .paths import get_logs_path
+
 # Resolve project root safely (Windows/Linux independent)
 PROJECT_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..")
@@ -13,8 +15,11 @@ PROCESSED_FILE = os.path.join(
     "processed",
     "processed_files.csv"
 )
+
+_log_path = get_logs_path("pipeline.log")
+os.makedirs(os.path.dirname(_log_path), exist_ok=True)
 logging.basicConfig(
-    filename=r"D:\data_engineering_project\data\logs\pipeline.log",
+    filename=_log_path,
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
 )

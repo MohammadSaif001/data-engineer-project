@@ -19,6 +19,11 @@ def check_data_slim():
     tables_to_check = ['crm_customers_info', 'crm_prd_info']
 
     for table in tables_to_check:
+        if table not in ('crm_customers_info', 'crm_prd_info', 'crm_sales_details',
+                         'erp_cust_az12', 'erp_location_a101', 'erp_px_cat_g1v2'):
+            print(f"Skipping unknown table: {table}")
+            continue
+
         print(f"\n{'='*60}")
         print(f"TABLE: {table.upper()} (Without Raw JSON)")
         print(f"{'='*60}")

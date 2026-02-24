@@ -10,22 +10,27 @@ python_folder = os.path.dirname(silver_folder)
 if python_folder not in sys.path:
     sys.path.append(python_folder)             # .../python
 
-if python_folder not in sys.path:
-    sys.path.append(python_folder)
-
 
 from utils.db_connection import get_engine
-from utils.paths import get_raw_data_path
+from utils.paths import get_raw_data_path, get_logs_path
 
 def extract_from_bronze(table_name: str) -> pd.DataFrame:
+    allowed_tables = {
+        "crm_customers_info", "crm_prd_info", "crm_sales_details",
+        "erp_cust_az12", "erp_location_a101", "erp_px_cat_g1v2",
+    }
+    if table_name not in allowed_tables:
+        raise ValueError(f"Table name not allowed: {table_name}")
     engine = get_engine("bronze")
     try:
         return pd.read_sql(f"SELECT * FROM {table_name}", engine)
     except Exception as e:
         raise RuntimeError(f"Failed to extract from bronze table {table_name}") from e
     
+_log_path = get_logs_path("pipeline.log")
+os.makedirs(os.path.dirname(_log_path), exist_ok=True)
 logging.basicConfig(
-    filename=r"D:\data_engineering_project\data\logs\pipeline.log",
+    filename=_log_path,
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
     )
